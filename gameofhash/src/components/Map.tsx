@@ -13,7 +13,7 @@ import geohash from 'ngeohash';
 import 'leaflet/dist/leaflet.css';
 import { useEffect, useState } from 'react';
 
-const RESOLUTION = 2;
+const RESOLUTION = 5;
 const FPS = 5;
 
 const PolygonWithText = ({
@@ -48,7 +48,7 @@ const GeoHash = ({ hash }: { hash: string }) => {
         [maxLat, maxLng],
         [maxLat, minLng],
       ]}
-      text={''} //hash}
+      text={hash}
     />
   );
 };
@@ -136,36 +136,81 @@ const Map = () => {
 
   // game main loop
   useEffect(() => {
-    if (!isPlaying) {
-      setPlayedFrames(0);
-    } else {
-      const interval = setInterval(() => {
-        setSelectedHashes((selectedHashes) => golStep(selectedHashes));
-        setPlayedFrames((playedFrames) => playedFrames + 1);
-      }, 1000 / FPS);
-      return () => clearInterval(interval);
-    }
-    return;
+    if (!isPlaying) return;
+    const interval = setInterval(() => {
+      setSelectedHashes((selectedHashes) => {
+        const nextStep = golStep(selectedHashes);
+        // if same hashes pause
+        if (
+          nextStep.length === selectedHashes.length &&
+          nextStep.every(function (value, index) {
+            return value === selectedHashes[index];
+          })
+        ) {
+          setIsPlaying(false);
+        }
+        return nextStep;
+      });
+      setPlayedFrames((playedFrames) => playedFrames + 1);
+    }, 1000 / FPS);
+    return () => clearInterval(interval);
   }, [isPlaying]);
 
   return (
     <>
-      <MapContainer center={[48.196, 16.357]} zoom={13} scrollWheelZoom={true}>
+      <MapContainer
+        center={[48.196, 16.357]}
+        zoom={13}
+        minZoom={1}
+        maxBounds={[
+          [-90, -180],
+          [90, 180],
+        ]}
+      >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          noWrap={true}
         />
         <GeoHashes
           resolution={RESOLUTION}
           hashes={selectedHashes}
           addHash={addHash}
-          clickable={!isPlaying}
+          clickable={!playedFrames}
         />
       </MapContainer>
-      <button onClick={() => setIsPlaying((isPlaying) => !isPlaying)}>
-        {isPlaying ? 'Stop' : 'Start'}
-      </button>
-      {isPlaying && <div>Played frames: {playedFrames}</div>}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: 10,
+          left: 10,
+          padding: 5,
+          backgroundColor: 'white',
+          display: 'flex',
+          flexDirection: 'row',
+          placeItems: 'center',
+          gap: 10,
+          border: '1px solid black',
+          borderRadius: 5,
+        }}
+      >
+        <button onClick={() => setIsPlaying((isPlaying) => !isPlaying)}>
+          {isPlaying ? 'Pause' : 'Start'}
+        </button>
+        {!!playedFrames && (
+          <button
+            onClick={() => {
+              setIsPlaying(false);
+              setSelectedHashes([]);
+              setPlayedFrames(0);
+            }}
+          >
+            Reset
+          </button>
+        )}
+        {!!playedFrames && <div>Played frames: {playedFrames}</div>}
+        {!!playedFrames && <div>Cells alive: {selectedHashes.length}</div>}
+      </div>
     </>
   );
 };
